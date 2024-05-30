@@ -1,0 +1,103 @@
+// Crear la base de datos si es que no existe
+
+CREATE DATABASE IF NOT EXISTS arroba;
+
+USE arroba;
+
+// Crear las tablas
+
+CREATE TABLE CLIENTES (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(255),
+    direccion VARCHAR(255)
+);
+
+CREATE TABLE PRODUCTOS (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(255),
+    cantidad INT,
+    precio DECIMAL(10, 2)
+);
+
+CREATE TABLE FACTURAS (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    fecha DATE,
+    total DECIMAL(10, 2),
+    clienteId INT,
+    FOREIGN KEY (clienteId) REFERENCES CLIENTES(id)
+);
+
+CREATE TABLE PRODUCTOS_FACTURA (
+    idFactura INT,
+    idProducto INT,
+    cantidad INT,
+    precioVenta DECIMAL(10, 2),
+    PRIMARY KEY (idFactura, idProducto),
+    FOREIGN KEY (idFactura) REFERENCES FACTURAS(id),
+    FOREIGN KEY (idProducto) REFERENCES PRODUCTOS(id)
+);
+
+CREATE TABLE USUARIOS (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(255),
+    tipo ENUM('cliente', 'administrador'),
+    clienteId INT,
+    FOREIGN KEY (clienteId) REFERENCES CLIENTES(id),
+    CONSTRAINT chk_clienteId CHECK (tipo = 'administrador' OR (tipo = 'cliente' AND clienteId IS NOT NULL))
+);
+
+// Insertar los datos correspondientes
+
+INSERT INTO CLIENTES (nombre, direccion) VALUES
+('Filemon', NULL),
+('Nepomuceno', NULL);
+
+INSERT INTO PRODUCTOS (nombre, cantidad, precio) VALUES
+('lapiz', 93, 12.00),
+('Pluma', 198, 15.00),
+('Borrador', 100, 10.00);
+
+INSERT INTO FACTURAS (fecha, total, clienteId) VALUES
+(CURDATE() - INTERVAL 1 DAY, 30.00, 1),
+(CURDATE(), 35.00, 1);
+
+INSERT INTO PRODUCTOS_FACTURA (idFactura, idProducto, cantidad, precioVenta) VALUES
+(1, 1, 2, 10.00),
+(1, 2, 2, 15.00),
+(2, 1, 5, 12.00);
+
+INSERT INTO USUARIOS (nombre, tipo, clienteId) VALUES
+('Juan Perez', 'cliente', 1),
+('Maria Lopez', 'administrador', NULL);
+
+// Crear triggers para actualizar el inventario después de insertar en PRODUCTOS_FACTURA
+
+DELIMITER //
+
+CREATE TRIGGER trg_after_insert_productos_factura
+AFTER INSERT ON PRODUCTOS_FACTURA
+FOR EACH ROW
+BEGIN
+    UPDATE PRODUCTOS
+    SET cantidad = cantidad - NEW.cantidad
+    WHERE id = NEW.idProducto;
+END//
+
+// Crear triggers para actualizar el inventario después de actualizar en PRODUCTOS_FACTURA
+CREATE TRIGGER trg_after_update_productos_factura
+AFTER UPDATE ON PRODUCTOS_FACTURA
+FOR EACH ROW
+BEGIN
+    DECLARE cantidad_previa INT;
+    SET cantidad_previa = (SELECT cantidad FROM PRODUCTOS WHERE id = OLD.idProducto);
+    
+    UPDATE PRODUCTOS
+    SET cantidad = cantidad + OLD.cantidad
+    WHERE id = OLD.idProducto;
+
+    UPDATE PRODUCTOS
+    SET cantidad = cantidad - NEW.cantidad
+    WHERE id = NEW.idProducto;
+END//
+
+DELIMITER ;
